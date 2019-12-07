@@ -20,8 +20,22 @@ install: build
 	sudo systemctl --system start softu2f.socket
 	sudo install -m 755 target/debug/softu2f-user-daemon /usr/libexec/softu2f/user-daemon
 	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
-	systemctl --user enable softu2f.service
-	systemctl --user start softu2f.service
+	# systemctl --user enable softu2f.service
+	# systemctl --user start softu2f.service
+	
+update: build
+	sudo mkdir -p /usr/libexec/softu2f
+	sudo install -m 755 target/debug/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
+	sudo install -m 644 ${systemdaemondir}/softu2f.service /etc/systemd/system/softu2f.service
+	sudo install -m 644 ${systemdaemondir}/softu2f.socket /etc/systemd/system/softu2f.socket
+	sudo install -m 644 ${systemdaemondir}/softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
+	# sudo ${selinuxpolicydir}/softu2f-system-daemon.sh
+	# sudo systemctl --system enable softu2f.socket
+	# sudo systemctl --system start softu2f.socket
+	sudo install -m 755 target/debug/softu2f-user-daemon /usr/libexec/softu2f/user-daemon
+	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
+	# systemctl --user enable softu2f.service
+	# systemctl --user start softu2f.service
 
 uninstall:
 	-systemctl --user disable softu2f.service

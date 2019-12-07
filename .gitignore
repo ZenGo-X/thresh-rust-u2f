@@ -5,3 +5,9 @@ target/
 /todo.*
 /build
 /dist
+
+linux/system-daemon/selinux-policy/noarch/
+linux/system-daemon/selinux-policy/softu2f-system-daemon-selinux-0.1.0-1.fc30.src.rpm
+linux/system-daemon/selinux-policy/softu2f-system-daemon.pp
+linux/system-daemon/selinux-policy/softu2f_system_daemon_selinux.8
+linux/system-daemon/selinux-policy/tmp/
