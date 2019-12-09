@@ -17,6 +17,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
+extern crate rand_core;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
@@ -37,6 +38,8 @@ use futures::IntoFuture;
 pub use key_handle::KeyHandle;
 pub use known_app_ids::try_reverse_app_id;
 use known_app_ids::BOGUS_APP_ID_HASH;
+use openssl::ec::EcKey;
+use openssl::pkey::Public;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use private_key::PrivateKey;
 use public_key::PublicKey;
@@ -609,8 +612,7 @@ mod tests {
     use openssl::hash::MessageDigest;
     use openssl::pkey::PKey;
     use openssl::sign::Verifier;
-    use rand::rngs::OsRng;
-    use rand::Rng;
+    use rand_core::{OsRng, RngCore};
 
     use super::attestation::Attestation;
     use super::*;
@@ -642,10 +644,16 @@ mod tests {
     }
 
     impl UserPresence for FakeUserPresence {
-        fn approve_registration(&self, _: &AppId) -> Box<dyn Future<Item = bool, Error = io::Error>> {
+        fn approve_registration(
+            &self,
+            _: &AppId,
+        ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_registration))
         }
-        fn approve_authentication(&self, _: &AppId) -> Box<dyn Future<Item = bool, Error = io::Error>> {
+        fn approve_authentication(
+            &self,
+            _: &AppId,
+        ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_authentication))
         }
         fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>> {
@@ -673,7 +681,7 @@ mod tests {
         fn add_application_key(
             &self,
             key: &ApplicationKey,
-        //) -> Box<dyn Future<Item = (), Error = io::Error>> {
+            //) -> Box<dyn Future<Item = (), Error = io::Error>> {
         ) -> io::Result<()> {
             self.0
                 .borrow_mut()
@@ -686,7 +694,7 @@ mod tests {
             &self,
             application: &AppId,
             handle: &KeyHandle,
-        // ) -> Box<dyn Future<Item = Counter, Error = io::Error>> {
+            // ) -> Box<dyn Future<Item = Counter, Error = io::Error>> {
         ) -> io::Result<Counter> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {
@@ -705,19 +713,17 @@ mod tests {
             application: &AppId,
             handle: &KeyHandle,
         ) -> io::Result<Option<ApplicationKey>> {
-        //) -> Box<dyn Future<Item = Option<ApplicationKey>, Error = io::Error>> {
-            Ok(
-                match self.0.borrow().application_keys.get(application) {
-                    Some(key) => {
-                        if key.handle.eq_consttime(handle) {
-                            Some(key.clone())
-                        } else {
-                            None
-                        }
+            //) -> Box<dyn Future<Item = Option<ApplicationKey>, Error = io::Error>> {
+            Ok(match self.0.borrow().application_keys.get(application) {
+                Some(key) => {
+                    if key.handle.eq_consttime(handle) {
+                        Some(key.clone())
+                    } else {
+                        None
                     }
-                    None => None,
-                },
-            )
+                }
+                None => None,
+            })
         }
     }
 
@@ -762,178 +768,185 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-     #[test]
-     fn is_valid_key_handle_with_valid_handle_is_true() {
-         let approval = Box::new(FakeUserPresence::always_approve());
-         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-         let storage = Box::new(InMemoryStorage::new());
-         let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn is_valid_key_handle_with_valid_handle_is_true() {
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-         let application = fake_app_id();
-         let challenge = fake_challenge();
-         let registration = u2f.register(application.clone(), challenge).wait().unwrap();
+        let application = fake_app_id();
+        let challenge = fake_challenge();
+        let registration = u2f.register(application.clone(), challenge).wait().unwrap();
 
-         assert_matches!(
-             u2f.is_valid_key_handle(&registration.key_handle, &application),
-             Ok(true)
-         );
-     }
+        assert_matches!(
+            u2f.is_valid_key_handle(&registration.key_handle, &application),
+            Ok(true)
+        );
+    }
 
-     #[test]
-     fn authenticate_with_invalid_handle_errors() {
-         let approval = Box::new(FakeUserPresence::always_approve());
-         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-         let storage = Box::new(InMemoryStorage::new());
-         let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn authenticate_with_invalid_handle_errors() {
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-         let application = fake_app_id();
-         let challenge = fake_challenge();
-         let key_handle = fake_key_handle();
+        let application = fake_app_id();
+        let challenge = fake_challenge();
+        let key_handle = fake_key_handle();
 
-         assert_matches!(
-             u2f.authenticate(application, challenge, key_handle).wait(),
-             Err(AuthenticateError::InvalidKeyHandle)
-         );
-     }
+        assert_matches!(
+            u2f.authenticate(application, challenge, key_handle).wait(),
+            Err(AuthenticateError::InvalidKeyHandle)
+        );
+    }
 
-     #[test]
-     fn authenticate_with_valid_handle_succeeds() {
-         let approval = Box::new(FakeUserPresence::always_approve());
-         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-         let storage = Box::new(InMemoryStorage::new());
-         let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn authenticate_with_valid_handle_succeeds() {
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-         let application = fake_app_id();
-         let challenge = fake_challenge();
-         let registration = u2f
-             .register(application.clone(), challenge.clone())
-             .wait()
-             .unwrap();
+        let application = fake_app_id();
+        let challenge = fake_challenge();
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
-         u2f.authenticate(application, challenge, registration.key_handle)
-             .wait()
-             .unwrap();
-     }
+        u2f.authenticate(application, challenge, registration.key_handle)
+            .wait()
+            .unwrap();
+    }
 
-     #[test]
-     fn authenticate_with_rejected_approval_errors() {
-         let approval = Box::new(FakeUserPresence {
-             should_approve_authentication: false,
-             should_approve_registration: true,
-         });
-         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-         let storage = Box::new(InMemoryStorage::new());
-         let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn authenticate_with_rejected_approval_errors() {
+        let approval = Box::new(FakeUserPresence {
+            should_approve_authentication: false,
+            should_approve_registration: true,
+        });
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-         let application = fake_app_id();
-         let challenge = fake_challenge();
-         let registration = u2f
-             .register(application.clone(), challenge.clone())
-             .wait()
-             .unwrap();
+        let application = fake_app_id();
+        let challenge = fake_challenge();
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
-         assert_matches!(
-             u2f.authenticate(application, challenge, registration.key_handle)
-                 .wait(),
-             Err(AuthenticateError::ApprovalRequired)
-         );
-     }
+        assert_matches!(
+            u2f.authenticate(application, challenge, registration.key_handle)
+                .wait(),
+            Err(AuthenticateError::ApprovalRequired)
+        );
+    }
 
-   #[test]
-   fn register_with_rejected_approval_errors() {
-       let approval = Box::new(FakeUserPresence {
-           should_approve_authentication: true,
-           should_approve_registration: false,
-       });
-       let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-       let storage = Box::new(InMemoryStorage::new());
-       let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn register_with_rejected_approval_errors() {
+        let approval = Box::new(FakeUserPresence {
+            should_approve_authentication: true,
+            should_approve_registration: false,
+        });
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-       let application = fake_app_id();
-       let challenge = fake_challenge();
+        let application = fake_app_id();
+        let challenge = fake_challenge();
 
-       assert_matches!(
-           u2f.register(application, challenge).wait(),
-           Err(RegisterError::ApprovalRequired)
-       );
-   }
+        assert_matches!(
+            u2f.register(application, challenge).wait(),
+            Err(RegisterError::ApprovalRequired)
+        );
+    }
 
-   // fn verify_signature(signature: &dyn Signature, data: &[u8], public_key: &PKey<PublicKey>) {
-   //     let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
-   //     verifier.update(data).unwrap();
-   //     assert!(verifier.verify(signature.as_ref()).unwrap());
-   // }
+    fn verify_signature(signature: &dyn Signature, data: &[u8], public_key: &PKey<Public>) {
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &public_key).unwrap();
+        verifier.update(data).unwrap();
+        assert!(verifier.verify(signature.as_ref()).unwrap());
+    }
 
-   // #[test]
-   // fn authenticate_signature() {
-   //     let approval = Box::new(FakeUserPresence::always_approve());
-   //     let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-   //     let storage = Box::new(InMemoryStorage::new());
-   //     let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn authenticate_signature() {
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-   //     let mut rng = OsRng::new().unwrap();
-   //     let application = AppId(rng.gen());
-   //     let register_challenge = Challenge(rng.gen());
+        let mut key = [0u8; 32];
+        let mut challenge = [0u8; 32];
+        OsRng.fill_bytes(&mut key);
+        OsRng.fill_bytes(&mut challenge);
+        println!("Challenge {:?}", challenge);
+        let application = AppId(key);
+        let register_challenge = Challenge(challenge);
 
-   //     let registration = u2f
-   //         .register(application.clone(), register_challenge.clone())
-   //         .wait()
-   //         .unwrap();
+        let registration = u2f
+            .register(application.clone(), register_challenge.clone())
+            .wait()
+            .unwrap();
 
-   //     let authentication_challenge = Challenge(rng.gen());
-   //     let authentication = u2f
-   //         .authenticate(
-   //             application.clone(),
-   //             authentication_challenge.clone(),
-   //             registration.key_handle.clone(),
-   //         )
-   //         .wait()
-   //         .unwrap();
+        OsRng.fill_bytes(&mut challenge);
+        println!("Challenge {:?}", challenge);
+        let authentication_challenge = Challenge(challenge);
+        let authentication = u2f
+            .authenticate(
+                application.clone(),
+                authentication_challenge.clone(),
+                registration.key_handle.clone(),
+            )
+            .wait()
+            .unwrap();
 
-   //     let user_presence_byte = user_presence_byte(true);
-   //     let user_public_key = PublicKey::from_bytes(&registration.user_public_key).unwrap();
-   //     let user_pkey = PKey::from_ec_key(*user_public_key.as_ec_key()).unwrap();
-   //     let signed_data = message_to_sign_for_authenticate(
-   //         &application,
-   //         &authentication_challenge,
-   //         user_presence_byte,
-   //         authentication.counter,
-   //     );
-   //     verify_signature(
-   //         authentication.signature.as_ref(),
-   //         signed_data.as_ref(),
-   //         &user_pkey,
-   //     );
-   // }
+        let user_presence_byte = user_presence_byte(true);
+        let user_public_key = PublicKey::from_bytes(&registration.user_public_key).unwrap();
+        let user_pkey = PKey::from_ec_key(user_public_key.as_ec_key().to_owned()).unwrap();
+        let signed_data = message_to_sign_for_authenticate(
+            &application,
+            &authentication_challenge,
+            user_presence_byte,
+            authentication.counter,
+        );
+        println!("Singed Data {:?}", signed_data);
 
-   //  #[test]
-   //  fn register_signature() {
-   //      let approval = Box::new(FakeUserPresence::always_approve());
-   //      let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-   //      let storage = Box::new(InMemoryStorage::new());
-   //      let u2f = U2F::new(approval, operations, storage, None).unwrap();
+        verify_signature(
+            authentication.signature.as_ref(),
+            signed_data.as_ref(),
+            &user_pkey,
+        );
+    }
 
-   //      let mut rng = OsRng::new().unwrap();
-   //      let application = AppId(rng.gen());
-   //      let challenge = Challenge(rng.gen());
+    //  #[test]
+    //  fn register_signature() {
+    //      let approval = Box::new(FakeUserPresence::always_approve());
+    //      let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+    //      let storage = Box::new(InMemoryStorage::new());
+    //      let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-   //      let registration = u2f
-   //          .register(application.clone(), challenge.clone())
-   //          .wait()
-   //          .unwrap();
+    //      let mut rng = OsRng::new().unwrap();
+    //      let application = AppId(rng.gen());
+    //      let challenge = Challenge(rng.gen());
 
-   //      let public_key = registration.attestation_certificate.0.public_key().unwrap();
-   //      let signed_data = message_to_sign_for_register(
-   //          &application,
-   //          &challenge,
-   //          &registration.user_public_key,
-   //          &registration.key_handle,
-   //      );
-   //      verify_signature(
-   //          registration.signature.as_ref(),
-   //          signed_data.as_ref(),
-   //          &public_key,
-   //      );
-   //  }
+    //      let registration = u2f
+    //          .register(application.clone(), challenge.clone())
+    //          .wait()
+    //          .unwrap();
 
+    //      let public_key = registration.attestation_certificate.0.public_key().unwrap();
+    //      let signed_data = message_to_sign_for_register(
+    //          &application,
+    //          &challenge,
+    //          &registration.user_public_key,
+    //          &registration.key_handle,
+    //      );
+    //      verify_signature(
+    //          registration.signature.as_ref(),
+    //          signed_data.as_ref(),
+    //          &public_key,
+    //      );
+    //  }
 }
