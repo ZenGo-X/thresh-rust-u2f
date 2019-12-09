@@ -678,11 +678,7 @@ mod tests {
     }
 
     impl SecretStore for InMemoryStorage {
-        fn add_application_key(
-            &self,
-            key: &ApplicationKey,
-            //) -> Box<dyn Future<Item = (), Error = io::Error>> {
-        ) -> io::Result<()> {
+        fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
             self.0
                 .borrow_mut()
                 .application_keys
@@ -693,8 +689,7 @@ mod tests {
         fn get_and_increment_counter(
             &self,
             application: &AppId,
-            handle: &KeyHandle,
-            // ) -> Box<dyn Future<Item = Counter, Error = io::Error>> {
+            _handle: &KeyHandle,
         ) -> io::Result<Counter> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {
@@ -713,7 +708,6 @@ mod tests {
             application: &AppId,
             handle: &KeyHandle,
         ) -> io::Result<Option<ApplicationKey>> {
-            //) -> Box<dyn Future<Item = Option<ApplicationKey>, Error = io::Error>> {
             Ok(match self.0.borrow().application_keys.get(application) {
                 Some(key) => {
                     if key.handle.eq_consttime(handle) {
@@ -920,33 +914,36 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-    //  #[test]
-    //  fn register_signature() {
-    //      let approval = Box::new(FakeUserPresence::always_approve());
-    //      let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-    //      let storage = Box::new(InMemoryStorage::new());
-    //      let u2f = U2F::new(approval, operations, storage, None).unwrap();
+    #[test]
+    fn register_signature() {
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-    //      let mut rng = OsRng::new().unwrap();
-    //      let application = AppId(rng.gen());
-    //      let challenge = Challenge(rng.gen());
+        let mut key = [0u8; 32];
+        let mut challenge = [0u8; 32];
+        OsRng.fill_bytes(&mut key);
+        OsRng.fill_bytes(&mut challenge);
+        let application = AppId(key);
+        let challenge = Challenge(challenge);
 
-    //      let registration = u2f
-    //          .register(application.clone(), challenge.clone())
-    //          .wait()
-    //          .unwrap();
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
-    //      let public_key = registration.attestation_certificate.0.public_key().unwrap();
-    //      let signed_data = message_to_sign_for_register(
-    //          &application,
-    //          &challenge,
-    //          &registration.user_public_key,
-    //          &registration.key_handle,
-    //      );
-    //      verify_signature(
-    //          registration.signature.as_ref(),
-    //          signed_data.as_ref(),
-    //          &public_key,
-    //      );
-    //  }
+        let public_key = registration.attestation_certificate.0.public_key().unwrap();
+        let signed_data = message_to_sign_for_register(
+            &application,
+            &challenge,
+            &registration.user_public_key,
+            &registration.key_handle,
+        );
+        verify_signature(
+            registration.signature.as_ref(),
+            signed_data.as_ref(),
+            &public_key,
+        );
+    }
 }
