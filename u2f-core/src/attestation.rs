@@ -1,8 +1,11 @@
-use std::fmt::{self, Debug};
 use openssl::x509::X509;
+use std::fmt::{self, Debug};
 
 use private_key::PrivateKey;
 
+// Each device has an attestation certificate, this certificate can
+// potentially used to verify the device is legitimate
+// In this case it will probably be self signed
 #[derive(Clone)]
 pub struct Attestation {
     pub(crate) certificate: AttestationCertificate,

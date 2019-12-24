@@ -38,8 +38,6 @@ use futures::IntoFuture;
 pub use key_handle::KeyHandle;
 pub use known_app_ids::try_reverse_app_id;
 use known_app_ids::BOGUS_APP_ID_HASH;
-use openssl::ec::EcKey;
-use openssl::pkey::Public;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use private_key::PrivateKey;
 use public_key::PublicKey;
@@ -138,6 +136,9 @@ pub trait SecretStore {
     ) -> io::Result<Option<ApplicationKey>>;
 }
 
+// The Registration struct is sent back to the server to verify,
+// It has the user public key, an attestation certificate, and a signature
+// on the challenge sent by the server
 #[derive(Debug)]
 pub struct Registration {
     user_public_key: Vec<u8>,
@@ -146,6 +147,8 @@ pub struct Registration {
     signature: Box<dyn Signature>,
 }
 
+// A signature over a challenge provided by the server,
+// using the application specific private key
 #[derive(Debug)]
 pub struct Authentication {
     counter: Counter,
@@ -218,6 +221,7 @@ impl U2F {
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
 
+    // Get the application specific key using the key handle
     fn _authenticate_step1(
         self_rc: Rc<U2FInner>,
         application: AppId,
@@ -241,6 +245,7 @@ impl U2F {
         )
     }
 
+    // Obtain user presence confirmation
     fn _authenticate_step2(
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
@@ -257,6 +262,7 @@ impl U2F {
         )
     }
 
+    // Increase the counter if user is present
     fn _authenticate_step3(
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
@@ -285,6 +291,7 @@ impl U2F {
         )
     }
 
+    // Sign the challenge with the application specific private key
     fn _authenticate_step4(
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
@@ -329,7 +336,10 @@ impl U2F {
     }
 
     // Registration entry point, receive the unique AppId for the application
-    // and a challange to sign from the server
+    // and a challenge to sign from the server
+    // When registering, we need to correctly answer the challenge of the
+    // server, and to store the private key created for the application for
+    // future use
     pub fn register(
         &self,
         application: AppId,
@@ -339,6 +349,7 @@ impl U2F {
         Self::_register_step1(self.0.clone(), application, challenge)
     }
 
+    // Provide a user present signal
     fn _register_step1(
         self_rc: Rc<U2FInner>,
         application: AppId,
@@ -355,6 +366,8 @@ impl U2F {
         )
     }
 
+    // Creating a new key pair for the application happens here
+    // Creating the key is done via the openssl library
     fn _register_step2(
         self_rc: Rc<U2FInner>,
         application: AppId,
@@ -370,6 +383,7 @@ impl U2F {
             Err(err) => return Box::new(future::err(err).from_err()),
         };
 
+        // Application specific private key is stored
         Box::new(
             self_rc
                 .storage
@@ -385,6 +399,7 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
+        // Create public key from the application specific private key
         let public_key = PublicKey::from_key(application_key.key());
         let public_key_bytes: Vec<u8> = public_key.to_raw();
         let signature = self_rc.operations.attest(&message_to_sign_for_register(
@@ -395,6 +410,7 @@ impl U2F {
         ))?;
         let attestation_certificate = self_rc.operations.get_attestation_certificate();
 
+        // Return a struct of the application handle, and the user public key
         Ok(Registration {
             user_public_key: public_key_bytes,
             key_handle: application_key.handle,
@@ -611,6 +627,7 @@ mod tests {
 
     use openssl::hash::MessageDigest;
     use openssl::pkey::PKey;
+    use openssl::pkey::Public;
     use openssl::sign::Verifier;
     use rand_core::{OsRng, RngCore};
 
@@ -865,12 +882,51 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
     }
 
     #[test]
+    fn register_signature() {
+        // Initialization process
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
+
+        let mut key = [0u8; 32];
+        let mut challenge = [0u8; 32];
+        // Create new key and challenge
+        OsRng.fill_bytes(&mut key);
+        OsRng.fill_bytes(&mut challenge);
+        let application = AppId(key);
+        let challenge = Challenge(challenge);
+
+        // Register the new service, also returns a new key pair for that service
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
+
+        // Why is registration verified with the attestation public key?
+        let public_key = registration.attestation_certificate.0.public_key().unwrap();
+        let signed_data = message_to_sign_for_register(
+            &application,
+            &challenge,
+            &registration.user_public_key,
+            &registration.key_handle,
+        );
+
+        verify_signature(
+            registration.signature.as_ref(),
+            signed_data.as_ref(),
+            &public_key,
+        );
+    }
+
+    #[test]
     fn authenticate_signature() {
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
         let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
+        // Mock challenge and key for the test
         let mut key = [0u8; 32];
         let mut challenge = [0u8; 32];
         OsRng.fill_bytes(&mut key);
@@ -879,11 +935,13 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = AppId(key);
         let register_challenge = Challenge(challenge);
 
+        // Register the application and its key
         let registration = u2f
             .register(application.clone(), register_challenge.clone())
             .wait()
             .unwrap();
 
+        // New challenge for authentication
         OsRng.fill_bytes(&mut challenge);
         println!("Challenge {:?}", challenge);
         let authentication_challenge = Challenge(challenge);
@@ -905,45 +963,12 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             user_presence_byte,
             authentication.counter,
         );
-        println!("Singed Data {:?}", signed_data);
 
+        // This bit is done by the server, the test checks the user has authenticated correctly
         verify_signature(
             authentication.signature.as_ref(),
             signed_data.as_ref(),
             &user_pkey,
-        );
-    }
-
-    #[test]
-    fn register_signature() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
-        let u2f = U2F::new(approval, operations, storage, None).unwrap();
-
-        let mut key = [0u8; 32];
-        let mut challenge = [0u8; 32];
-        OsRng.fill_bytes(&mut key);
-        OsRng.fill_bytes(&mut challenge);
-        let application = AppId(key);
-        let challenge = Challenge(challenge);
-
-        let registration = u2f
-            .register(application.clone(), challenge.clone())
-            .wait()
-            .unwrap();
-
-        let public_key = registration.attestation_certificate.0.public_key().unwrap();
-        let signed_data = message_to_sign_for_register(
-            &application,
-            &challenge,
-            &registration.user_public_key,
-            &registration.key_handle,
-        );
-        verify_signature(
-            registration.signature.as_ref(),
-            signed_data.as_ref(),
-            &public_key,
         );
     }
 }
