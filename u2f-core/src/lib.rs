@@ -18,6 +18,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate slog;
 extern crate rand_core;
+extern crate serde_json;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
@@ -301,6 +302,11 @@ impl U2F {
     ) -> Result<Authentication, AuthenticateError> {
         let user_presence_byte = user_presence_byte(user_present);
 
+        println!(
+            "Authentication Key {}",
+            serde_json::to_string(&application_key).unwrap()
+        );
+
         let signature = self_rc.operations.sign(
             application_key.key(),
             &message_to_sign_for_authenticate(
@@ -377,11 +383,15 @@ impl U2F {
         if !user_present {
             return Box::new(future::err(RegisterError::ApprovalRequired));
         }
-
+        // Generate the same key for testing
         let application_key = match self_rc.operations.generate_application_key(&application) {
             Ok(application_key) => application_key,
             Err(err) => return Box::new(future::err(err).from_err()),
         };
+        println!(
+            "Registration Key {}",
+            serde_json::to_string(&application_key).unwrap()
+        );
 
         // Application specific private key is stored
         Box::new(
@@ -448,7 +458,6 @@ impl Service for U2F {
                 Box::new(
                     self.register(application, challenge)
                         .map(move |registration| {
-                            info!(logger, "#### NOW REGISTERED! ###");
                             debug!(logger, "Request::Register => Ok");
                             Response::Registration {
                                 user_public_key: registration.user_public_key,

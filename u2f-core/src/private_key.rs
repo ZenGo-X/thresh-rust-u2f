@@ -1,10 +1,11 @@
-use std::fmt::{self, Debug};
-use std::result::Result;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use openssl::ec::EcKey;
 use openssl::pkey::Private;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{self, Debug};
+use std::mem;
+use std::result::Result;
 
-use serde_base64::{to_base64, from_base64};
+use serde_base64::{from_base64, to_base64};
 
 pub struct PrivateKey(pub(crate) EcKey<Private>);
 
@@ -20,9 +21,19 @@ impl Clone for PrivateKey {
     }
 }
 
+unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
+    ::std::slice::from_raw_parts((p as *const T) as *const u8, ::std::mem::size_of::<T>())
+}
+
 impl Debug for PrivateKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PrivateKey")
+        // println!("{} bytes of T:", ::std::mem::size_of::<PrivateKey>());
+        // let view = &self as *const _ as *const u8;
+        // for i in 0..::std::mem::size_of::<PrivateKey>() as u8 {
+        //     print!("{:02x} ", unsafe { *view.offset(i) });
+        // }
+        let bytes: &[u8] = unsafe { any_as_u8_slice(&self) };
+        write!(f, "Private Key: {:?}", bytes)
     }
 }
 

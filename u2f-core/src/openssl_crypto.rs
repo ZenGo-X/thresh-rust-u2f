@@ -30,6 +30,13 @@ impl OpenSSLCryptoOperations {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         let ec_key = EcKey::generate(&group).unwrap();
         PrivateKey(ec_key)
+        //         PrivateKey::from_pem(
+        //             "-----BEGIN EC PRIVATE KEY-----
+        // MHcCAQEEINIJimHh50/UPEfQQ1yQhH/c/NEF07gFahKQ7XTpqd14oAoGCCqGSM49
+        // AwEHoUQDQgAEgmpfZeZvZKynn6OIVsjdBAlB6+H8n37xdyJJIIV/5LpqBhmrZ+r2
+        // bqdpDHNiSlfVUF5my21whPdtTtmPssoMtw==
+        // -----END EC PRIVATE KEY-----",
+        //         )
     }
 
     fn generate_key_handle() -> io::Result<KeyHandle> {
