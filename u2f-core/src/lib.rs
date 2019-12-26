@@ -631,6 +631,10 @@ fn message_to_sign_for_register(
 
 #[cfg(test)]
 mod tests {
+    use ring::{
+        rand,
+        signature::{self, KeyPair},
+    };
     use std::cell::RefCell;
     use std::collections::HashMap;
 
@@ -979,5 +983,45 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             signed_data.as_ref(),
             &user_pkey,
         );
+    }
+
+    #[test]
+    fn test_ring() {
+        // Generate a key pair in PKCS#8 (v2) format.
+        let rng = rand::SystemRandom::new();
+        let pkcs8_bytes = signature::EcdsaKeyPair::generate_pkcs8(
+            &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
+            &rng,
+        )
+        .unwrap();
+
+        // Normally the application would store the PKCS#8 file persistently. Later
+        // it would read the PKCS#8 file from persistent storage to use it.
+
+        let key_pair = signature::EcdsaKeyPair::from_pkcs8(
+            &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
+            pkcs8_bytes.as_ref(),
+        )
+        .unwrap();
+
+        // Sign the message "hello, world".
+        const MESSAGE: &[u8] = b"hello, world";
+        let sig = key_pair.sign(&rng, MESSAGE);
+
+        // Normally an application would extract the bytes of the signature and
+        // send them in a protocol message to the peer(s). Here we just get the
+        // public key key directly from the key pair.
+        let peer_public_key_bytes = key_pair.public_key().as_ref();
+
+        // Verify the signature of the message using the public key. Normally the
+        // verifier of the message would parse the inputs to this code out of the
+        // protocol message(s) sent by the signer.
+        let peer_public_key = signature::UnparsedPublicKey::new(
+            &signature::ECDSA_P256_SHA256_FIXED,
+            peer_public_key_bytes,
+        );
+        peer_public_key
+            .verify(MESSAGE, sig.unwrap().as_ref())
+            .unwrap();
     }
 }

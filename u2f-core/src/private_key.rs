@@ -2,7 +2,6 @@ use openssl::ec::EcKey;
 use openssl::pkey::Private;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{self, Debug};
-use std::mem;
 use std::result::Result;
 
 use serde_base64::{from_base64, to_base64};
@@ -27,11 +26,6 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 
 impl Debug for PrivateKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // println!("{} bytes of T:", ::std::mem::size_of::<PrivateKey>());
-        // let view = &self as *const _ as *const u8;
-        // for i in 0..::std::mem::size_of::<PrivateKey>() as u8 {
-        //     print!("{:02x} ", unsafe { *view.offset(i) });
-        // }
         let bytes: &[u8] = unsafe { any_as_u8_slice(&self) };
         write!(f, "Private Key: {:?}", bytes)
     }
