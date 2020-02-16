@@ -102,7 +102,7 @@ impl AsRef<[u8]> for Challenge {
     }
 }
 
-pub trait Signature: AsRef<[u8]> + Debug + Send {}
+pub trait SignatureLoc: AsRef<[u8]> + Debug + Send {}
 
 pub trait UserPresence {
     fn approve_registration(
@@ -117,10 +117,10 @@ pub trait UserPresence {
 }
 
 pub trait CryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError>;
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
+    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError>;
 }
 
 pub trait SecretStore {
@@ -145,7 +145,7 @@ pub struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
     attestation_certificate: AttestationCertificate,
-    signature: Box<dyn Signature>,
+    signature: Box<dyn SignatureLoc>,
 }
 
 // A signature over a challenge provided by the server,
@@ -153,7 +153,7 @@ pub struct Registration {
 #[derive(Debug)]
 pub struct Authentication {
     counter: Counter,
-    signature: Box<dyn Signature>,
+    signature: Box<dyn SignatureLoc>,
     user_present: bool,
 }
 
@@ -631,6 +631,9 @@ fn message_to_sign_for_register(
 
 #[cfg(test)]
 mod tests {
+    extern crate client_lib;
+    extern crate server_lib;
+
     use ring::{
         rand,
         signature::{self, KeyPair},
@@ -646,6 +649,10 @@ mod tests {
 
     use super::attestation::Attestation;
     use super::*;
+
+    use self::client_lib::*;
+    use self::server_lib::server;
+    use std::{thread, time};
 
     fn fake_app_id() -> AppId {
         AppId([0u8; 32])
@@ -888,7 +895,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-    fn verify_signature(signature: &dyn Signature, data: &[u8], public_key: &PKey<Public>) {
+    fn verify_signature(signature: &dyn SignatureLoc, data: &[u8], public_key: &PKey<Public>) {
         let mut verifier = Verifier::new(MessageDigest::sha256(), &public_key).unwrap();
         verifier.update(data).unwrap();
         assert!(verifier.verify(signature.as_ref()).unwrap());
@@ -986,42 +993,39 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
     }
 
     #[test]
-    fn test_ring() {
-        // Generate a key pair in PKCS#8 (v2) format.
-        let rng = rand::SystemRandom::new();
-        let pkcs8_bytes = signature::EcdsaKeyPair::generate_pkcs8(
-            &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
-            &rng,
-        )
-        .unwrap();
+    fn test_ecdsa() {
+        spawn_server();
 
-        // Normally the application would store the PKCS#8 file persistently. Later
-        // it would read the PKCS#8 file from persistent storage to use it.
+        let client_shim = ClientShim::new("http://localhost:8000".to_string(), None);
 
-        let key_pair = signature::EcdsaKeyPair::from_pkcs8(
-            &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
-            pkcs8_bytes.as_ref(),
-        )
-        .unwrap();
+        let ps: ecdsa::PrivateShare = ecdsa::get_master_key(&client_shim);
 
-        // Sign the message "hello, world".
-        const MESSAGE: &[u8] = b"hello, world";
-        let sig = key_pair.sign(&rng, MESSAGE);
+        for y in 0..10 {
+            let x_pos = BigInt::from(0);
+            let y_pos = BigInt::from(y);
+            println!("Deriving child_master_key at [x: {}, y:{}]", x_pos, y_pos);
 
-        // Normally an application would extract the bytes of the signature and
-        // send them in a protocol message to the peer(s). Here we just get the
-        // public key key directly from the key pair.
-        let peer_public_key_bytes = key_pair.public_key().as_ref();
+            let child_master_key = ps.master_key.get_child(vec![x_pos.clone(), y_pos.clone()]);
 
-        // Verify the signature of the message using the public key. Normally the
-        // verifier of the message would parse the inputs to this code out of the
-        // protocol message(s) sent by the signer.
-        let peer_public_key = signature::UnparsedPublicKey::new(
-            &signature::ECDSA_P256_SHA256_FIXED,
-            peer_public_key_bytes,
-        );
-        peer_public_key
-            .verify(MESSAGE, sig.unwrap().as_ref())
-            .unwrap();
+            let msg: BigInt = BigInt::from(y + 1); // arbitrary message
+            let signature = ecdsa::sign(&client_shim, msg, &child_master_key, x_pos, y_pos, &ps.id)
+                .expect("ECDSA signature failed");
+
+            println!(
+                "signature = (r: {}, s: {})",
+                signature.r.to_hex(),
+                signature.s.to_hex()
+            );
+        }
+    }
+
+    fn spawn_server() {
+        // Rocket server is blocking, so we spawn a new thread.
+        thread::spawn(move || {
+            server::get_server().launch();
+        });
+
+        let five_seconds = time::Duration::from_millis(5000);
+        thread::sleep(five_seconds);
     }
 }

@@ -4,22 +4,22 @@ use attestation::AttestationCertificate;
 use byteorder::{BigEndian, WriteBytesExt};
 use key_handle::KeyHandle;
 
-use super::Counter;
-use super::Signature;
-use super::SignError;
-use super::StatusCode;
 use super::user_presence_byte;
+use super::Counter;
+use super::SignError;
+use super::SignatureLoc;
+use super::StatusCode;
 
 pub enum Response {
     Registration {
         user_public_key: Vec<u8>,
         key_handle: KeyHandle,
         attestation_certificate: AttestationCertificate,
-        signature: Box<dyn Signature>,
+        signature: Box<dyn SignatureLoc>,
     },
     Authentication {
         counter: Counter,
-        signature: Box<dyn Signature>,
+        signature: Box<dyn SignatureLoc>,
         user_present: bool,
     },
     Version {

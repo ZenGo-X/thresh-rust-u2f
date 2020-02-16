@@ -13,7 +13,7 @@ use private_key::PrivateKey;
 
 use super::CryptoOperations;
 use super::SignError;
-use super::Signature;
+use super::SignatureLoc;
 
 pub struct OpenSSLCryptoOperations {
     attestation: Attestation,
@@ -45,7 +45,7 @@ impl OpenSSLCryptoOperations {
 }
 
 impl CryptoOperations for OpenSSLCryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError> {
         self.sign(&self.attestation.key, data)
     }
 
@@ -59,7 +59,7 @@ impl CryptoOperations for OpenSSLCryptoOperations {
         self.attestation.certificate.clone()
     }
 
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
+    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError> {
         let ec_key = key.0.to_owned();
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
@@ -72,7 +72,7 @@ impl CryptoOperations for OpenSSLCryptoOperations {
 #[derive(Debug)]
 struct RawSignature(Vec<u8>);
 
-impl Signature for RawSignature {}
+impl SignatureLoc for RawSignature {}
 
 impl AsRef<[u8]> for RawSignature {
     fn as_ref(&self) -> &[u8] {
