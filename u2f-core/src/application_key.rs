@@ -1,25 +1,28 @@
+extern crate client_lib;
+
+use self::client_lib::ecdsa::PrivateShare;
+
 use app_id::AppId;
 use key_handle::KeyHandle;
-use private_key::PrivateKey;
 
 // A private key is generated per application
 // This stores the AppID for indexing, and a private key for signing
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct ApplicationKey {
     pub application: AppId,
     pub handle: KeyHandle,
-    key: PrivateKey,
+    key: PrivateShare,
 }
 
 impl ApplicationKey {
-    pub fn new(application: AppId, handle: KeyHandle, key: PrivateKey) -> ApplicationKey {
+    pub fn new(application: AppId, handle: KeyHandle, key: PrivateShare) -> ApplicationKey {
         ApplicationKey {
             application,
             handle,
             key,
         }
     }
-    pub(crate) fn key(&self) -> &PrivateKey {
+    pub(crate) fn key(&self) -> &PrivateShare {
         &self.key
     }
 }

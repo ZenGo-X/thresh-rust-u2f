@@ -17,8 +17,11 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
+extern crate client_lib;
 extern crate rand_core;
 extern crate serde_json;
+extern crate server_lib;
+extern crate sha2;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
@@ -28,6 +31,8 @@ use std::io;
 use std::rc::Rc;
 use std::result::Result;
 
+use self::client_lib::{ecdsa, BigInt, ClientShim};
+
 pub use app_id::AppId;
 pub use application_key::ApplicationKey;
 use attestation::AttestationCertificate;
@@ -36,10 +41,10 @@ use constants::*;
 use futures::future;
 use futures::Future;
 use futures::IntoFuture;
+pub use gotham_crypto::GothamCryptoOperations as SecureCryptoOperations;
 pub use key_handle::KeyHandle;
 pub use known_app_ids::try_reverse_app_id;
 use known_app_ids::BOGUS_APP_ID_HASH;
-pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use private_key::PrivateKey;
 use public_key::PublicKey;
 pub use request::{AuthenticateControlCode, Request};
@@ -52,9 +57,9 @@ mod app_id;
 mod application_key;
 mod attestation;
 mod constants;
+mod gotham_crypto;
 mod key_handle;
 mod known_app_ids;
-mod openssl_crypto;
 mod private_key;
 mod public_key;
 mod request;
@@ -120,7 +125,11 @@ pub trait CryptoOperations {
     fn attest(&self, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError>;
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError>;
+    fn sign(
+        &self,
+        key: &ecdsa::PrivateShare,
+        data: &[u8],
+    ) -> Result<Box<dyn SignatureLoc>, SignError>;
 }
 
 pub trait SecretStore {
@@ -650,7 +659,7 @@ mod tests {
     use super::attestation::Attestation;
     use super::*;
 
-    use self::client_lib::*;
+    use self::client_lib::{ecdsa, BigInt, ClientShim};
     use self::server_lib::server;
     use std::{thread, time};
 
