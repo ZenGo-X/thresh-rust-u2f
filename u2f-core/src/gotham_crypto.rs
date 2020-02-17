@@ -73,7 +73,7 @@ impl CryptoOperations for GothamCryptoOperations {
     ) -> Result<Box<dyn SignatureLoc>, SignError> {
         let x_pos = BigInt::from(0);
         let y_pos = BigInt::from(0);
-        // Fist hash the message
+        // First hash the message
         let mut hasher = Sha256::new();
         hasher.input(data);
         let result = hasher.result();
@@ -82,16 +82,16 @@ impl CryptoOperations for GothamCryptoOperations {
             &self.client_shim,
             BigInt::from(&result[..]),
             &child_master_key,
-            x_pos,
-            y_pos,
+            x_pos.clone(),
+            y_pos.clone(),
             &ps.id,
         );
-        // Todo check result
-        let r_vec = BigInt::to_vec(&signature.unwrap().r);
+        // TODO check result
+        let unwraped_sig = signature.unwrap();
+        let r_vec = BigInt::to_vec(&unwraped_sig.r);
         let mut r_padded = vec![0; 32 - r_vec.len()];
         r_padded.extend_from_slice(&r_vec);
-
-        let s_vec = BigInt::to_vec(&signature.unwrap().s);
+        let s_vec = BigInt::to_vec(&unwraped_sig.s);
         let mut s_padded = vec![0; 32 - s_vec.len()];
         s_padded.extend_from_slice(&s_vec);
 

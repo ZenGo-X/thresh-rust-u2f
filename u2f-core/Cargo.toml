@@ -31,3 +31,8 @@ path = "/Users/amanusk/rust/gotham-city/gotham-client"
 
 [dependencies.slog]
 version = "2.5.2"
+
+[dependencies.curv]
+git = "https://github.com/KZen-networks/curv"
+tag = "v0.2.0"
+features = ["ec_secp256k1"]

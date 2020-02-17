@@ -18,6 +18,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate slog;
 extern crate client_lib;
+extern crate curv;
 extern crate rand_core;
 extern crate serde_json;
 extern crate server_lib;
@@ -31,7 +32,7 @@ use std::io;
 use std::rc::Rc;
 use std::result::Result;
 
-use self::client_lib::{ecdsa, BigInt, ClientShim};
+use client_lib::*;
 
 pub use app_id::AppId;
 pub use application_key::ApplicationKey;
@@ -46,12 +47,15 @@ pub use key_handle::KeyHandle;
 pub use known_app_ids::try_reverse_app_id;
 use known_app_ids::BOGUS_APP_ID_HASH;
 pub use private_key::PrivateKey;
-use public_key::PublicKey;
+pub use public_key::PublicKey;
 pub use request::{AuthenticateControlCode, Request};
 pub use response::Response;
 pub use self_signed_attestation::self_signed_attestation;
 use slog::Drain;
 pub use tokio_service::Service;
+
+// use curv::elliptic::curves::secp256_k1::Secp256k1Point;
+use curv::elliptic::curves::traits::ECPoint;
 
 mod app_id;
 mod application_key;
@@ -398,8 +402,19 @@ impl U2F {
             Err(err) => return Box::new(future::err(err).from_err()),
         };
         println!(
-            "Registration Key {}",
+            "RegistrationKeyJson {}",
             serde_json::to_string(&application_key).unwrap()
+        );
+        println!(
+            "RegistrationKeyHex {}",
+            BigInt::to_hex(
+                &application_key
+                    .key()
+                    .master_key
+                    .public
+                    .q
+                    .bytes_compressed_to_big_int()
+            )
         );
 
         // Application specific private key is stored
@@ -419,8 +434,9 @@ impl U2F {
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
         // Create public key from the application specific private key
-        let public_key = PublicKey::from_key(application_key.key());
-        let public_key_bytes: Vec<u8> = public_key.to_raw();
+        let public_key_bytes = application_key.key().master_key.public.q.pk_to_key_slice();
+        // let public_key = PublicKey::from_key(application_key.key());
+        // let public_key_bytes: Vec<u8> = public_key.to_raw();
         let signature = self_rc.operations.attest(&message_to_sign_for_register(
             &application_key.application,
             &challenge,
@@ -643,10 +659,6 @@ mod tests {
     extern crate client_lib;
     extern crate server_lib;
 
-    use ring::{
-        rand,
-        signature::{self, KeyPair},
-    };
     use std::cell::RefCell;
     use std::collections::HashMap;
 
@@ -659,7 +671,7 @@ mod tests {
     use super::attestation::Attestation;
     use super::*;
 
-    use self::client_lib::{ecdsa, BigInt, ClientShim};
+    use self::client_lib::*;
     use self::server_lib::server;
     use std::{thread, time};
 
@@ -710,7 +722,7 @@ mod tests {
     struct InMemoryStorage(RefCell<InMemoryStorageInner>);
 
     struct InMemoryStorageInner {
-        application_keys: HashMap<AppId, ApplicationKey>,
+        application_keys: HashMap<AppId, String>,
         counters: HashMap<AppId, Counter>,
     }
 
@@ -728,7 +740,7 @@ mod tests {
             self.0
                 .borrow_mut()
                 .application_keys
-                .insert(key.application, key.clone());
+                .insert(key.application, serde_json::to_string(key).unwrap());
             Ok(())
         }
 
@@ -756,8 +768,9 @@ mod tests {
         ) -> io::Result<Option<ApplicationKey>> {
             Ok(match self.0.borrow().application_keys.get(application) {
                 Some(key) => {
-                    if key.handle.eq_consttime(handle) {
-                        Some(key.clone())
+                    let des_key: ApplicationKey = serde_json::from_str(key).unwrap();
+                    if des_key.handle.eq_consttime(handle) {
+                        Some(des_key)
                     } else {
                         None
                     }
@@ -794,6 +807,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
@@ -810,6 +824,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
@@ -827,6 +842,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_invalid_handle_errors() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
@@ -844,6 +860,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_valid_handle_succeeds() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
@@ -863,6 +880,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_rejected_approval_errors() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence {
             should_approve_authentication: false,
             should_approve_registration: true,
@@ -887,6 +905,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn register_with_rejected_approval_errors() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence {
             should_approve_authentication: true,
             should_approve_registration: false,
@@ -912,6 +931,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn register_signature() {
+        spawn_server();
         // Initialization process
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
@@ -950,6 +970,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_signature() {
+        spawn_server();
         let approval = Box::new(FakeUserPresence::always_approve());
         let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
         let storage = Box::new(InMemoryStorage::new());
@@ -999,33 +1020,6 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             signed_data.as_ref(),
             &user_pkey,
         );
-    }
-
-    #[test]
-    fn test_ecdsa() {
-        spawn_server();
-
-        let client_shim = ClientShim::new("http://localhost:8000".to_string(), None);
-
-        let ps: ecdsa::PrivateShare = ecdsa::get_master_key(&client_shim);
-
-        for y in 0..10 {
-            let x_pos = BigInt::from(0);
-            let y_pos = BigInt::from(y);
-            println!("Deriving child_master_key at [x: {}, y:{}]", x_pos, y_pos);
-
-            let child_master_key = ps.master_key.get_child(vec![x_pos.clone(), y_pos.clone()]);
-
-            let msg: BigInt = BigInt::from(y + 1); // arbitrary message
-            let signature = ecdsa::sign(&client_shim, msg, &child_master_key, x_pos, y_pos, &ps.id)
-                .expect("ECDSA signature failed");
-
-            println!(
-                "signature = (r: {}, s: {})",
-                signature.r.to_hex(),
-                signature.s.to_hex()
-            );
-        }
     }
 
     fn spawn_server() {
