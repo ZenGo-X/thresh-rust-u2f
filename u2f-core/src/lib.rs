@@ -315,10 +315,7 @@ impl U2F {
     ) -> Result<Authentication, AuthenticateError> {
         let user_presence_byte = user_presence_byte(user_present);
 
-        println!(
-            "Authentication Key {}",
-            serde_json::to_string(&application_key).unwrap()
-        );
+        println!("Authentication Key {:}", &application_key);
 
         let signature = self_rc.operations.sign(
             application_key.key(),
@@ -401,21 +398,19 @@ impl U2F {
             Ok(application_key) => application_key,
             Err(err) => return Box::new(future::err(err).from_err()),
         };
-        println!(
-            "RegistrationKeyJson {}",
-            serde_json::to_string(&application_key).unwrap()
-        );
-        println!(
-            "RegistrationKeyHex {}",
-            BigInt::to_hex(
-                &application_key
-                    .key()
-                    .master_key
-                    .public
-                    .q
-                    .bytes_compressed_to_big_int()
-            )
-        );
+        println!("RegistrationKeyJson {}", &application_key);
+
+        // println!(
+        //     "RegistrationKeyHex {}",
+        //     BigInt::to_hex(
+        //         &application_key
+        //             .key()
+        //             .master_key
+        //             .public
+        //             .q
+        //             .bytes_compressed_to_big_int()
+        //     )
+        // );
 
         // Application specific private key is stored
         Box::new(
@@ -680,7 +675,6 @@ mod tests {
     use super::attestation::Attestation;
     use super::*;
 
-    use self::client_lib::*;
     use self::server_lib::server;
     use std::{thread, time};
 
@@ -731,7 +725,7 @@ mod tests {
     struct InMemoryStorage(RefCell<InMemoryStorageInner>);
 
     struct InMemoryStorageInner {
-        application_keys: HashMap<AppId, String>,
+        application_keys: HashMap<AppId, ApplicationKey>,
         counters: HashMap<AppId, Counter>,
     }
 
@@ -749,7 +743,7 @@ mod tests {
             self.0
                 .borrow_mut()
                 .application_keys
-                .insert(key.application, serde_json::to_string(key).unwrap());
+                .insert(key.application, key.clone());
             Ok(())
         }
 
@@ -777,9 +771,8 @@ mod tests {
         ) -> io::Result<Option<ApplicationKey>> {
             Ok(match self.0.borrow().application_keys.get(application) {
                 Some(key) => {
-                    let des_key: ApplicationKey = serde_json::from_str(key).unwrap();
-                    if des_key.handle.eq_consttime(handle) {
-                        Some(des_key)
+                    if key.handle.eq_consttime(handle) {
+                        Some(key.clone())
                     } else {
                         None
                     }

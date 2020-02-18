@@ -26,3 +26,16 @@ impl ApplicationKey {
         &self.key
     }
 }
+
+impl std::fmt::Display for ApplicationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(&self).unwrap())
+    }
+}
+
+impl Clone for ApplicationKey {
+    fn clone(&self) -> ApplicationKey {
+        let ser = serde_json::to_string(&self).unwrap();
+        serde_json::from_str(&ser).unwrap()
+    }
+}
