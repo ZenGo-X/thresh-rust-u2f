@@ -1,14 +1,14 @@
-use std::io;
-
 use app_id::AppId;
 use application_key::ApplicationKey;
 use attestation::{Attestation, AttestationCertificate};
 use key_handle::KeyHandle;
-use openssl::hash::MessageDigest;
+use openssl::hash::{hash, MessageDigest};
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
+
 use private_key::PrivateKey;
-use sha2::{Digest, Sha256};
+use secp256k1::Signature;
+use std::io;
 
 use super::CryptoOperations;
 use super::SignError;
@@ -73,31 +73,30 @@ impl CryptoOperations for GothamCryptoOperations {
     ) -> Result<Box<dyn SignatureLoc>, SignError> {
         let x_pos = BigInt::from(0);
         let y_pos = BigInt::from(0);
-        // First hash the message
-        let mut hasher = Sha256::new();
-        hasher.input(data);
-        let result = hasher.result();
+
         let child_master_key = ps.master_key.get_child(vec![x_pos.clone(), y_pos.clone()]);
+
+        // TODO check result
+        let result = hash(MessageDigest::sha256(), data).unwrap();
+
         let signature = ecdsa::sign(
             &self.client_shim,
             BigInt::from(&result[..]),
             &child_master_key,
-            x_pos.clone(),
-            y_pos.clone(),
+            x_pos,
+            y_pos,
             &ps.id,
-        );
-        // TODO check result
-        let unwraped_sig = signature.unwrap();
-        let r_vec = BigInt::to_vec(&unwraped_sig.r);
-        let mut r_padded = vec![0; 32 - r_vec.len()];
-        r_padded.extend_from_slice(&r_vec);
-        let s_vec = BigInt::to_vec(&unwraped_sig.s);
-        let mut s_padded = vec![0; 32 - s_vec.len()];
-        s_padded.extend_from_slice(&s_vec);
+        )
+        .expect("No signature generated. Is server running?");
 
-        r_padded.extend(s_padded);
+        let mut v = BigInt::to_vec(&signature.r);
+        v.extend(BigInt::to_vec(&signature.s));
 
-        Ok(Box::new(RawSignature(r_padded)))
+        let der_sig = Signature::from_compact(&v[..])
+            .expect("compact signatures are 64 bytes; DER signatures are 68-72 bytes")
+            .serialize_der()
+            .to_vec();
+        Ok(Box::new(RawSignature(der_sig)))
     }
 }
 

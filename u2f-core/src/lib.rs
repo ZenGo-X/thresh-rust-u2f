@@ -20,9 +20,9 @@ extern crate slog;
 extern crate client_lib;
 extern crate curv;
 extern crate rand_core;
+extern crate secp256k1;
 extern crate serde_json;
 extern crate server_lib;
-extern crate sha2;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
@@ -433,8 +433,16 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
+        let x_pos = BigInt::from(0);
+        let y_pos = BigInt::from(0);
+
+        let child_master_key = application_key
+            .key()
+            .master_key
+            .get_child(vec![x_pos.clone(), y_pos.clone()]);
+
         // Create public key from the application specific private key
-        let public_key_bytes = application_key.key().master_key.public.q.pk_to_key_slice();
+        let public_key_bytes = child_master_key.public.q.pk_to_key_slice();
         println!("PublicKey {:?}", base64::encode(&public_key_bytes));
         // let public_key = PublicKey::from_key(application_key.key());
         // let public_key_bytes: Vec<u8> = public_key.to_raw();
@@ -1014,6 +1022,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             base64::encode(&registration.user_public_key)
         );
         let user_pkey = PKey::from_ec_key(user_public_key.as_ec_key().to_owned()).unwrap();
+
         let signed_data = message_to_sign_for_authenticate(
             &application,
             &authentication_challenge,
@@ -1022,11 +1031,11 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
 
         // This bit is done by the server, the test checks the user has authenticated correctly
-        // verify_signature(
-        //     authentication.signature.as_ref(),
-        //     signed_data.as_ref(),
-        //     &user_pkey,
-        // );
+        verify_signature(
+            authentication.signature.as_ref(),
+            signed_data.as_ref(),
+            &user_pkey,
+        );
     }
 
     fn spawn_server() {
