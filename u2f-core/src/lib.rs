@@ -315,7 +315,7 @@ impl U2F {
     ) -> Result<Authentication, AuthenticateError> {
         let user_presence_byte = user_presence_byte(user_present);
 
-        println!("Authentication Key {:}", &application_key);
+        println!("Authentication Key {:?}", &application_key);
 
         let signature = self_rc.operations.sign(
             application_key.key(),
@@ -398,7 +398,7 @@ impl U2F {
             Ok(application_key) => application_key,
             Err(err) => return Box::new(future::err(err).from_err()),
         };
-        println!("RegistrationKeyJson {}", &application_key);
+        println!("RegistrationKeyJson {:?}", &application_key);
 
         // println!(
         //     "RegistrationKeyHex {}",

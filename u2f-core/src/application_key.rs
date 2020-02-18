@@ -1,6 +1,4 @@
-extern crate client_lib;
-
-use self::client_lib::ecdsa::PrivateShare;
+use client_lib::ecdsa::PrivateShare;
 
 use app_id::AppId;
 use key_handle::KeyHandle;
@@ -27,7 +25,7 @@ impl ApplicationKey {
     }
 }
 
-impl std::fmt::Display for ApplicationKey {
+impl std::fmt::Debug for ApplicationKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(&self).unwrap())
     }
