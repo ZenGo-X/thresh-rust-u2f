@@ -23,10 +23,10 @@ rand_core = "0.5.1"
 secp256k1 = "0.17.2"
 
 [dependencies.gotham-server]
-path = "/Users/amanusk/rust/gotham-city/gotham-server"
+path = "../../gotham-city/gotham-server"
 
 [dependencies.gotham-client]
-path = "/Users/amanusk/rust/gotham-city/gotham-client"
+path = "../../gotham-city/gotham-client"
 
 
 [dependencies.slog]
