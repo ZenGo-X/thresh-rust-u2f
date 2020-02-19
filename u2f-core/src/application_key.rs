@@ -34,6 +34,7 @@ impl std::fmt::Debug for ApplicationKey {
 impl Clone for ApplicationKey {
     fn clone(&self) -> ApplicationKey {
         let ser = serde_json::to_string(&self).unwrap();
-        serde_json::from_str(&ser).unwrap()
+        let app_key = serde_json::from_str(&ser).unwrap();
+        app_key
     }
 }

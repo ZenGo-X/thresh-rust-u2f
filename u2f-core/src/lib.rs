@@ -242,9 +242,10 @@ impl U2F {
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
-        let application_key = self_rc
+        let application_key: io::Result<Option<ApplicationKey>> = self_rc
             .storage
             .retrieve_application_key(&application, &key_handle);
+        println!("Retrieved application key {:?}", &application_key);
 
         Box::new(
             application_key
@@ -772,6 +773,7 @@ mod tests {
             Ok(match self.0.borrow().application_keys.get(application) {
                 Some(key) => {
                     if key.handle.eq_consttime(handle) {
+                        println!("Retrieved application key {:?}", &key);
                         Some(key.clone())
                     } else {
                         None
