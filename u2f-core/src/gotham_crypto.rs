@@ -7,12 +7,12 @@ use openssl::pkey::PKey;
 use openssl::sign::Signer;
 
 use private_key::PrivateKey;
-use secp256k1::Signature;
+use secp256k1::Signature as secpSignature;
 use std::io;
 
 use super::CryptoOperations;
 use super::SignError;
-use super::SignatureLoc;
+use super::Signature;
 
 use client_lib::*;
 
@@ -41,7 +41,7 @@ impl GothamCryptoOperations {
         &self,
         key: &PrivateKey,
         data: &[u8],
-    ) -> Result<Box<dyn SignatureLoc>, SignError> {
+    ) -> Result<Box<dyn Signature>, SignError> {
         let ec_key = key.0.to_owned();
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
@@ -52,7 +52,7 @@ impl GothamCryptoOperations {
 }
 
 impl CryptoOperations for GothamCryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError> {
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
         self.one_party_sign(&self.attestation.key, data)
     }
 
@@ -66,11 +66,7 @@ impl CryptoOperations for GothamCryptoOperations {
         self.attestation.certificate.clone()
     }
 
-    fn sign(
-        &self,
-        ps: &ecdsa::PrivateShare,
-        data: &[u8],
-    ) -> Result<Box<dyn SignatureLoc>, SignError> {
+    fn sign(&self, ps: &ecdsa::PrivateShare, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
         let x_pos = BigInt::from(0);
         let y_pos = BigInt::from(0);
 
@@ -92,7 +88,7 @@ impl CryptoOperations for GothamCryptoOperations {
         let mut v = BigInt::to_vec(&signature.r);
         v.extend(BigInt::to_vec(&signature.s));
 
-        let der_sig = Signature::from_compact(&v[..])
+        let der_sig = secpSignature::from_compact(&v[..])
             .expect("compact signatures are 64 bytes; DER signatures are 68-72 bytes")
             .serialize_der()
             .to_vec();
@@ -103,7 +99,7 @@ impl CryptoOperations for GothamCryptoOperations {
 #[derive(Debug)]
 struct RawSignature(Vec<u8>);
 
-impl SignatureLoc for RawSignature {}
+impl Signature for RawSignature {}
 
 impl AsRef<[u8]> for RawSignature {
     fn as_ref(&self) -> &[u8] {

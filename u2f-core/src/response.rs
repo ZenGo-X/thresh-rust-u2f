@@ -7,7 +7,7 @@ use key_handle::KeyHandle;
 use super::user_presence_byte;
 use super::Counter;
 use super::SignError;
-use super::SignatureLoc;
+use super::Signature;
 use super::StatusCode;
 
 pub enum Response {
@@ -15,11 +15,11 @@ pub enum Response {
         user_public_key: Vec<u8>,
         key_handle: KeyHandle,
         attestation_certificate: AttestationCertificate,
-        signature: Box<dyn SignatureLoc>,
+        signature: Box<dyn Signature>,
     },
     Authentication {
         counter: Counter,
-        signature: Box<dyn SignatureLoc>,
+        signature: Box<dyn Signature>,
         user_present: bool,
     },
     Version {

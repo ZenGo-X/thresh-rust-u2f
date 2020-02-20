@@ -34,23 +34,23 @@ use std::result::Result;
 
 use client_lib::*;
 
-pub use app_id::AppId;
-pub use application_key::ApplicationKey;
-use attestation::AttestationCertificate;
+pub use crate::app_id::AppId;
+pub use crate::application_key::ApplicationKey;
+use crate::attestation::AttestationCertificate;
+use crate::constants::*;
+pub use crate::gotham_crypto::GothamCryptoOperations as SecureCryptoOperations;
+pub use crate::key_handle::KeyHandle;
+pub use crate::known_app_ids::try_reverse_app_id;
+use crate::known_app_ids::BOGUS_APP_ID_HASH;
+pub use crate::private_key::PrivateKey;
+use crate::public_key::PublicKey;
+pub use crate::request::{AuthenticateControlCode, Request};
+pub use crate::response::Response;
+pub use crate::self_signed_attestation::self_signed_attestation;
 use byteorder::{BigEndian, WriteBytesExt};
-use constants::*;
 use futures::future;
 use futures::Future;
 use futures::IntoFuture;
-pub use gotham_crypto::GothamCryptoOperations as SecureCryptoOperations;
-pub use key_handle::KeyHandle;
-pub use known_app_ids::try_reverse_app_id;
-use known_app_ids::BOGUS_APP_ID_HASH;
-pub use private_key::PrivateKey;
-pub use public_key::PublicKey;
-pub use request::{AuthenticateControlCode, Request};
-pub use response::Response;
-pub use self_signed_attestation::self_signed_attestation;
 use slog::Drain;
 pub use tokio_service::Service;
 
@@ -111,7 +111,7 @@ impl AsRef<[u8]> for Challenge {
     }
 }
 
-pub trait SignatureLoc: AsRef<[u8]> + Debug + Send {}
+pub trait Signature: AsRef<[u8]> + Debug + Send {}
 
 pub trait UserPresence {
     fn approve_registration(
@@ -126,14 +126,11 @@ pub trait UserPresence {
 }
 
 pub trait CryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<dyn SignatureLoc>, SignError>;
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(
-        &self,
-        key: &ecdsa::PrivateShare,
-        data: &[u8],
-    ) -> Result<Box<dyn SignatureLoc>, SignError>;
+    fn sign(&self, key: &ecdsa::PrivateShare, data: &[u8])
+        -> Result<Box<dyn Signature>, SignError>;
 }
 
 pub trait SecretStore {
@@ -158,7 +155,7 @@ pub struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
     attestation_certificate: AttestationCertificate,
-    signature: Box<dyn SignatureLoc>,
+    signature: Box<dyn Signature>,
 }
 
 // A signature over a challenge provided by the server,
@@ -166,7 +163,7 @@ pub struct Registration {
 #[derive(Debug)]
 pub struct Authentication {
     counter: Counter,
-    signature: Box<dyn SignatureLoc>,
+    signature: Box<dyn Signature>,
     user_present: bool,
 }
 
@@ -242,7 +239,7 @@ impl U2F {
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
-        let application_key: io::Result<Option<ApplicationKey>> = self_rc
+        let application_key = self_rc
             .storage
             .retrieve_application_key(&application, &key_handle);
         println!("Retrieved application key {:?}", &application_key);
@@ -478,17 +475,19 @@ impl Service for U2F {
                 challenge,
                 application,
             } => {
-                let logger_clone = self.0.logger.clone();
-                debug!(logger, "Request::Register"; "app_id" => application);
+                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                debug!(logger, "Registration request");
 
                 if application == BOGUS_APP_ID_HASH {
+                    debug!(logger, "Rejecting bogus registration request from Chrome");
                     return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied));
                 }
 
+                let logger_clone = logger.clone();
                 Box::new(
                     self.register(application, challenge)
                         .map(move |registration| {
-                            debug!(logger, "Request::Register => Ok");
+                            info!(logger, "Registered");
                             Response::Registration {
                                 user_public_key: registration.user_public_key,
                                 key_handle: registration.key_handle,
@@ -498,18 +497,15 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(
-                                    logger_clone,
-                                    "Request::Register => TestOfUserPresenceNotSatisfied"
-                                );
+                                info!(logger_clone, "Registration was not approved");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                debug!(logger_clone, "Request::Register => IoError"; "error" => ?err);
+                                error!(logger_clone, "Registration failed"; "error" => ?err);
                                 Err(err)
                             }
                             RegisterError::Signing(err) => {
-                                debug!(logger_clone, "Request::Register => SigningError"; "error" => ?err);
+                                error!(logger_clone, "Registration failed"; "error" => ?err);
                                 Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                             }
                         }),
@@ -521,17 +517,17 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                let logger = self
-                    .0
-                    .logger
-                    .new(o!("request" => "authenticate", "app_id" => application));
+                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                debug!(logger, "Authenticate request");
+
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         debug!(logger, "ControlCode::CheckOnly");
                         Box::new(self.is_valid_key_handle(&key_handle, &application).into_future().map(
                             move |is_valid| {
-                                info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
+                                debug!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
                                 if is_valid {
+                                    info!(logger, "Valid key handle");
                                     Response::TestOfUserPresenceNotSatisfied
                                 } else {
                                     Response::InvalidKeyHandle
@@ -545,7 +541,7 @@ impl Service for U2F {
                         Box::new(
                             self.authenticate(application, challenge, key_handle)
                                 .map(move |authentication| {
-                                    info!(logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
+                                    info!(logger, "Authenticated"; "user_present" => &authentication.user_present);
                                     Response::Authentication {
                                         counter: authentication.counter,
                                         signature: authentication.signature,
@@ -562,11 +558,11 @@ impl Service for U2F {
                                         Ok(Response::InvalidKeyHandle)
                                     }
                                     AuthenticateError::Io(err) => {
-                                        info!(logger_clone, "I/O error"; "error" => ?err);
+                                        error!(logger_clone, "I/O error"; "error" => ?err);
                                         Ok(Response::UnknownError)
                                     }
                                     AuthenticateError::Signing(err) => {
-                                        info!(logger_clone, "Signing error"; "error" => ?err);
+                                        error!(logger_clone, "Signing error"; "error" => ?err);
                                         Ok(Response::UnknownError)
                                     }
                                 }),
@@ -577,21 +573,20 @@ impl Service for U2F {
                             logger,
                             "Request::Authenticate::DontEnforceUserPresenceAndSign"
                         );
-                        info!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign => TestOfUserPresenceNotSatisfied (Not implemented)");
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }
                 }
             }
             Request::GetVersion => {
-                debug!(logger, "Request::GetVersion");
+                debug!(logger, "Get version request");
                 let response = Response::Version {
                     version_string: self.get_version_string(),
                 };
                 Box::new(future::ok(response))
             }
             Request::Wink => Box::new(self.wink().map(|_| Response::DidWink).or_else(move |err| {
-                info!(logger, "I/O error"; "error" => format!("{:?}", err));
+                error!(logger, "I/O error"; "error" => ?err);
                 Ok(Response::UnknownError)
             })),
         }
@@ -927,7 +922,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-    fn verify_signature(signature: &dyn SignatureLoc, data: &[u8], public_key: &PKey<Public>) {
+    fn verify_signature(signature: &dyn Signature, data: &[u8], public_key: &PKey<Public>) {
         let mut verifier = Verifier::new(MessageDigest::sha256(), &public_key).unwrap();
         verifier.update(data).unwrap();
         assert!(verifier.verify(signature.as_ref()).unwrap());
