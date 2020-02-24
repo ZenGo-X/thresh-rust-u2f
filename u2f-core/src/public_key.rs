@@ -11,7 +11,7 @@ pub struct PublicKey(EcKey<Public>);
 
 impl PublicKey {
     pub(crate) fn from_key(key: &PrivateKey) -> PublicKey {
-        let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         PublicKey(EcKey::from_public_key(&group, &key.0.public_key()).unwrap())
     }
 
@@ -28,7 +28,7 @@ impl PublicKey {
         if bytes[0] != EC_POINT_FORMAT_UNCOMPRESSED {
             return Err(String::from("Expected uncompressed point"));
         }
-        let group = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         let point = EcPoint::from_bytes(&group, bytes, &mut ctx).unwrap();
         Ok(PublicKey(EcKey::from_public_key(&group, &point).unwrap()))
     }

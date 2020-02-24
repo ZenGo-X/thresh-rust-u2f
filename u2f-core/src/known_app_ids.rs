@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use app_id::AppId;
-use ring::digest;
+use openssl::hash::{hash, MessageDigest};
 
 // Known bogus hash. Chrome will try to register with this hash after certain failures,
 // such as the common case of authentication failing because there are no matching keys.
@@ -10,10 +10,8 @@ use ring::digest;
 //
 // See https://github.com/google/u2f-ref-code/blob/b11e47c5bca093c93d802286bead3db78a4b0b9f/u2f-chrome-extension/usbsignhandler.js#L118
 pub const BOGUS_APP_ID_HASH: AppId = AppId([
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8
+    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
+    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
 ]);
 
 pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {
@@ -52,5 +50,6 @@ lazy_static! {
 }
 
 fn from_url(url: &str) -> AppId {
-    AppId::from_bytes(digest::digest(&digest::SHA256, url.as_bytes()).as_ref())
+    let digest = hash(MessageDigest::sha256(), url.as_bytes()).unwrap();
+    AppId::from_bytes(digest.as_ref())
 }

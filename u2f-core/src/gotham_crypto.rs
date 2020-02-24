@@ -7,7 +7,6 @@ use openssl::pkey::PKey;
 use openssl::sign::Signer;
 
 use private_key::PrivateKey;
-use secp256k1::Signature as secpSignature;
 use std::io;
 
 use super::CryptoOperations;
@@ -88,7 +87,7 @@ impl CryptoOperations for GothamCryptoOperations {
         let mut v = BigInt::to_vec(&signature.r);
         v.extend(BigInt::to_vec(&signature.s));
 
-        let der_sig = secpSignature::from_compact(&v[..])
+        let der_sig = secp256k1::Signature::from_compact(&v[..])
             .expect("compact signatures are 64 bytes; DER signatures are 68-72 bytes")
             .serialize_der()
             .to_vec();

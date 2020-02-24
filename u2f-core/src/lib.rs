@@ -11,7 +11,6 @@ extern crate openssl;
 #[macro_use]
 extern crate quick_error;
 extern crate rand;
-extern crate ring;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -43,7 +42,6 @@ pub use crate::key_handle::KeyHandle;
 pub use crate::known_app_ids::try_reverse_app_id;
 use crate::known_app_ids::BOGUS_APP_ID_HASH;
 pub use crate::private_key::PrivateKey;
-use crate::public_key::PublicKey;
 pub use crate::request::{AuthenticateControlCode, Request};
 pub use crate::response::Response;
 pub use crate::self_signed_attestation::self_signed_attestation;
@@ -54,7 +52,6 @@ use futures::IntoFuture;
 use slog::Drain;
 pub use tokio_service::Service;
 
-// use curv::elliptic::curves::secp256_k1::Secp256k1Point;
 use curv::elliptic::curves::traits::ECPoint;
 
 mod app_id;
@@ -242,7 +239,7 @@ impl U2F {
         let application_key = self_rc
             .storage
             .retrieve_application_key(&application, &key_handle);
-        println!("Retrieved application key {:?}", &application_key);
+        // println!("Retrieved application key {:?}", &application_key);
 
         Box::new(
             application_key
@@ -313,7 +310,7 @@ impl U2F {
     ) -> Result<Authentication, AuthenticateError> {
         let user_presence_byte = user_presence_byte(user_present);
 
-        println!("Authentication Key {:?}", &application_key);
+        // println!("Authentication Key {:?}", &application_key);
 
         let signature = self_rc.operations.sign(
             application_key.key(),
@@ -396,7 +393,7 @@ impl U2F {
             Ok(application_key) => application_key,
             Err(err) => return Box::new(future::err(err).from_err()),
         };
-        println!("RegistrationKeyJson {:?}", &application_key);
+        // println!("RegistrationKeyJson {:?}", &application_key);
 
         // println!(
         //     "RegistrationKeyHex {}",
@@ -436,7 +433,7 @@ impl U2F {
 
         // Create public key from the application specific private key
         let public_key_bytes = child_master_key.public.q.pk_to_key_slice();
-        println!("PublicKey {:?}", base64::encode(&public_key_bytes));
+        // println!("PublicKey {:?}", base64::encode(&public_key_bytes));
         // let public_key = PublicKey::from_key(application_key.key());
         // let public_key_bytes: Vec<u8> = public_key.to_raw();
         let signature = self_rc.operations.attest(&message_to_sign_for_register(
@@ -662,6 +659,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use crate::public_key::PublicKey;
     use openssl::hash::MessageDigest;
     use openssl::pkey::PKey;
     use openssl::pkey::Public;
@@ -768,7 +766,7 @@ mod tests {
             Ok(match self.0.borrow().application_keys.get(application) {
                 Some(key) => {
                     if key.handle.eq_consttime(handle) {
-                        println!("Retrieved application key {:?}", &key);
+                        // println!("Retrieved application key {:?}", &key);
                         Some(key.clone())
                     } else {
                         None
@@ -991,7 +989,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         // New challenge for authentication
         OsRng.fill_bytes(&mut challenge);
-        println!("Challenge {:?}", challenge);
+        // println!("Challenge {:?}", challenge);
         let authentication_challenge = Challenge(challenge);
         let authentication = u2f
             .authenticate(
@@ -1003,14 +1001,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             .unwrap();
 
         let signature = authentication.signature.as_ref();
-        println!("Signature {:?}", base64::encode(&signature));
+        // println!("Signature {:?}", base64::encode(&signature));
 
         let user_presence_byte = user_presence_byte(true);
         let user_public_key = PublicKey::from_bytes(&registration.user_public_key).unwrap();
-        println!(
-            "PublicKey {:?}",
-            base64::encode(&registration.user_public_key)
-        );
+        // println!(
+        //     "PublicKey {:?}",
+        //     base64::encode(&registration.user_public_key)
+        // );
         let user_pkey = PKey::from_ec_key(user_public_key.as_ec_key().to_owned()).unwrap();
 
         let signed_data = message_to_sign_for_authenticate(
