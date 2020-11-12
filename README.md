@@ -22,6 +22,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 Install dependencies
 ```
+sudo yum install make
 sudo yum -y update glibc
 sudo yum install gmp
 sudo yum install gmp-devel
@@ -30,12 +31,21 @@ sudo yum install openssl-devel
 sudo yum install clang
 sudo yum install systemd-devel
 sudo yum install dbus-devel
+sudo yum install selinux-policy-devel
+sudo yum install rpm-build
 ```
 
 ```
 cd linux
 cargo build
+make install
 ```
+
+Change the storage from keyring to file
+```
+vim ~/.config/rustu2f/config.json
+```
+Change `SecretService` to `File`
 
 #### Build local server
 ```
