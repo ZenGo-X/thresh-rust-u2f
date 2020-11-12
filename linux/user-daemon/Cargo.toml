@@ -40,7 +40,8 @@ path = "../../u2fhid-protocol"
 tempdir = "0.3.7"
 
 [dependencies.gotham-server]
-path = "../../../gotham-city/gotham-server"
+git = "https://github.com/ZenGo-X/gotham-city.git"
+branch = "feature/p256"
 
 [package.metadata.deb]
 assets = [

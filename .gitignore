@@ -13,3 +13,5 @@ linux/system-daemon/selinux-policy/softu2f_system_daemon_selinux.8
 linux/system-daemon/selinux-policy/tmp/
 
 .*.swp
+
+*/db/

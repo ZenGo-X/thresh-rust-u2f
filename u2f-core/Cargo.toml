@@ -22,10 +22,12 @@ rand_core = "0.5.1"
 secp256k1 = "0.17.2"
 
 [dependencies.gotham-server]
-path = "../../gotham-city/gotham-server"
+git = "https://github.com/ZenGo-X/gotham-city.git"
+branch = "feature/p256"
 
 [dependencies.gotham-client]
-path = "../../gotham-city/gotham-client"
+git = "https://github.com/ZenGo-X/gotham-city.git"
+branch = "feature/p256"
 
 
 [dependencies.slog]

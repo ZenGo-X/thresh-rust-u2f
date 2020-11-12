@@ -1,14 +1,6 @@
-# Rust U2F
-
-[![Build Status](https://travis-ci.org/danstiner/rust-u2f.svg?branch=master)](https://travis-ci.org/danstiner/rust-u2f)
+# Threshold Rust U2F
 
 A software-only [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) token. Supports Google Chrome and Firefox on Linux. Written in [Rust](https://www.rust-lang.org/).
-
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/52513/53316061-32725f80-387b-11e9-8476-36207606db58.png" />
-</p>
-
-This program is basically complete, I am not currently planning to add new features like passwordless login the newer [FIDO2 standard](https://fidoalliance.org/specifications/) supports.
 
 ## Security
 
@@ -22,38 +14,34 @@ If your machine is compromised by malware, the attacker could steal a copy of th
 
 ### From source (tested on Fedora)
 
+#### Build client
+Install rust (tested with version: rustc 1.38.0-nightly (0b680cfce 2019-07-09)
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Install dependencies
 ```
 sudo yum -y update glibc
 sudo yum install gmp
 sudo yum install gmp-devel
+sudo yum install openssl
+sudo yum install openssl-devel
+sudo yum install clang
+sudo yum install systemd-devel
+sudo yum install dbus-devel
 ```
 
-Install rust (tested with version: rustc 1.38.0-nightly (0b680cfce 2019-07-09)
-
 ```
+cd linux
 cargo build
 ```
 
-### Fedora
-
-```bash
-curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.rpm.sh | sudo bash
-sudo dnf install softu2f
-systemctl --user start softu2f
+#### Build local server
 ```
-
-### Ubuntu
-
-```bash
-sudo apt install -y curl
-curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.deb.sh | sudo bash
-sudo apt install -y softu2f
-systemctl --user start softu2f
+cd local-server
+cargo build
 ```
-
-After installing, use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn-technical/registration
-
-Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
 
 ## License
 
