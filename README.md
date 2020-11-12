@@ -1,4 +1,5 @@
 # Rust U2F
+
 [![Build Status](https://travis-ci.org/danstiner/rust-u2f.svg?branch=master)](https://travis-ci.org/danstiner/rust-u2f)
 
 A software-only [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) token. Supports Google Chrome and Firefox on Linux. Written in [Rust](https://www.rust-lang.org/).
@@ -18,6 +19,20 @@ Like any U2F authenticator this program provides a degree of protection against 
 If your machine is compromised by malware, the attacker could steal a copy of the secret keys stored by this authenticator. In this situation you should immediately unregister this authenticator anywhere it is registered in addition to changing the passwords of any potentially compromised accounts. With a hardware authenticator secret keys never leave the device, so in the case of malware you can simply unplug from the infected machine and be confident your accounts are safe from further compromise.
 
 ## Installation
+
+### From source (tested on Fedora)
+
+```
+sudo yum -y update glibc
+sudo yum install gmp
+sudo yum install gmp-devel
+```
+
+Install rust (tested with version: rustc 1.38.0-nightly (0b680cfce 2019-07-09)
+
+```
+cargo build
+```
 
 ### Fedora
 
@@ -44,10 +59,10 @@ Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-sessio
 
 This project is licensed under either of
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
+  http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or
+  http://opensource.org/licenses/MIT)
 
 at your option.
 
