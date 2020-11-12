@@ -44,6 +44,7 @@ lazy_static! {
         map.insert(from_url("https://www.fastmail.com"), "www.fastmail.com");
         map.insert(from_url("webauthn.bin.coffee"), "webauthn.bin.coffee");
         map.insert(from_url("webauthn.io"), "webauthn.io");
+        map.insert(from_url("https://www.bitfinex.com"), "bitfinex.com");
 
         map
     };

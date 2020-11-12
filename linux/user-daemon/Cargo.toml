@@ -39,6 +39,9 @@ path = "../../u2fhid-protocol"
 [dev-dependencies]
 tempdir = "0.3.7"
 
+[dependencies.gotham-server]
+path = "../../../gotham-city/gotham-server"
+
 [package.metadata.deb]
 assets = [
     ["softu2f.service", "usr/lib/systemd/user/", "644"],
@@ -48,3 +51,4 @@ assets = [
 depends = "softu2f-system-daemon, systemd, dbus-user-session, $auto"
 extended-description = "A systemd daemon that provides a socket interface for unprivileged users to create emulated U2F devices."
 maintainer-scripts = "maintainer-scripts"
+
