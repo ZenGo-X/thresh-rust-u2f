@@ -48,6 +48,11 @@ vim ~/.config/rustu2f/config.json
 Change `SecretService` to `File`
 
 #### Build local server
+Install node required for local server
+```
+sudo dnf module install nodejs:10
+```
+Build server
 ```
 cd local-server
 cargo build
