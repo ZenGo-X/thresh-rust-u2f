@@ -1,26 +1,27 @@
 # Threshold Rust U2F
 
-A software-only [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) token. Supports Google Chrome and Firefox on Linux. Written in [Rust](https://www.rust-lang.org/).
+A software U2F [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) implementation using threshold signatures.
 
-## Security
+The implementation uses a server side and a client side to create a valid U2F signature using threshold signatures.
+It uses [Gotham-city](https://github.com/ZenGo-X/gotham-city) for the server and client sides.
+The client side emulates a USB communication and runs as a software daemon.
 
-Disclaimer: This is a personal project, I am not a security expert and make no guarantee of security.
-
-Like any U2F authenticator this program provides a degree of protection against phishing and poorly chosen passwords. It does **not** provide the same level of protection against malware that a hardware authenticator does. For some people the protection against phishing and convenience may be worth the security trade-off.
-
-If your machine is compromised by malware, the attacker could steal a copy of the secret keys stored by this authenticator. In this situation you should immediately unregister this authenticator anywhere it is registered in addition to changing the passwords of any potentially compromised accounts. With a hardware authenticator secret keys never leave the device, so in the case of malware you can simply unplug from the infected machine and be confident your accounts are safe from further compromise.
+The project is heavily inspired and based on [rust-u2f](https://github.com/danstiner/rust-u2f.git), with the addition of TSS functionality.
 
 ## Installation
 
 ### From source (tested on Fedora)
 
-#### Build client
-Install rust (tested with version: rustc 1.38.0-nightly (0b680cfce 2019-07-09)
+Install rust (tested with version: rustc 1.40.0-nightly (084beb83e 2019-09-27))
+
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup install nightly-2019-09-28-x86_64-unknown-linux-gnu
+rustup defualt nightly-2019-09-28-x86_64-unknown-linux-gnu
 ```
 
 Install dependencies
+
 ```
 sudo yum install make
 sudo yum -y update glibc
@@ -35,6 +36,8 @@ sudo yum install selinux-policy-devel
 sudo yum install rpm-build
 ```
 
+#### Build client
+
 ```
 cd linux
 cargo build
@@ -42,35 +45,57 @@ make install
 ```
 
 Change the storage from keyring to file
+
 ```
 vim ~/.config/rustu2f/config.json
 ```
+
 Change `SecretService` to `File`
 
-#### Build local server
+#### Build local-server
+
 Install node required for local server
+
 ```
 sudo dnf module install nodejs:10
 ```
+
 Build server
+
 ```
 cd local-server
 cargo build
 ```
 
-## License
+## Running
 
-This project is licensed under either of
+Once all the dependencies are installed, run the client and server side on two different terminals.
 
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-  http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or
-  http://opensource.org/licenses/MIT)
+### Running server
 
-at your option.
+```
+cd local-server
+cargo build
+./target/debug/local-server
+```
 
-### Contribution
+### Running client
 
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+```
+cd linux
+cargo build
+./target/debug/softu2f-user-daemon
+```
+
+## Testing
+
+Test `u2f-core` functionality
+
+```
+cd u2f-core
+cargo test
+```
+
+### Trying it out
+
+Visit Yubikey [demo](https://demo.yubico.com/webauthn-technical/registration) and see how it works.
